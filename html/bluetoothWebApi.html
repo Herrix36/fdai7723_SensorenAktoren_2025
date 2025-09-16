@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>ESP32 BLE AutoConnect</title>
+</head>
+
+<body>
+    <h1>ESP32 BLE Gateway</h1>
+    <button id="connect">Mit ESP32 verbinden</button>
+
+
+    <!-- Neue Elements für Temperatur und Luftfeuchtigkeit -->
+    <div id="sensor-data">
+        <p>Temperatur: <span id="temperature">--</span> °C</p>
+        <p>Luftfeuchtigkeit: <span id="humidity">--</span> %</p>
+    </div>
+
+    <script>
+        const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+        const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+        let device, characteristic;
+
+        document.getElementById("connect").addEventListener("click", async () => {
+            try {
+                // Benutzeraktion nötig, um den Dialog zu öffnen
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: [SERVICE_UUID] }]
+                });
+
+                // Mit GATT verbinden
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+                // Notifications aktivieren
+                await characteristic.startNotifications();
+                characteristic.addEventListener("characteristicvaluechanged", handleData);
+
+                document.getElementById("output").textContent = "Verbunden, warte auf Sensordaten...";
+
+                // Event für automatische Wiederverbindung bei Trennung
+                device.addEventListener('gattserverdisconnected', async () => {
+                    document.getElementById("output").textContent = "Verbindung getrennt, bitte erneut verbinden";
+                    console.log("ESP32 BLE getrennt.");
+                });
+
+            } catch (err) {
+                console.error("Fehler bei Verbindung:", err);
+                document.getElementById("output").textContent = "Fehler: " + err;
+            }
+        });
+
+        function handleData(event) {
+            const value = new TextDecoder().decode(event.target.value);
+            console.log("Rohdaten empfangen:", value);
+
+            // String bei Komma splitten und in Array konvertieren
+            const [temperature, humidity] = value.split(',').map(Number);
+
+            // Werte in HTML aktualisieren
+            document.getElementById("temperature").textContent = temperature.toFixed(1);
+            document.getElementById("humidity").textContent = humidity.toFixed(1);
+
+            // Debug-Ausgabe
+            console.log("Temperatur:", temperature, "°C");
+            console.log("Luftfeuchtigkeit:", humidity, "%");
+        }
+
+    </script>
+</body>
+
+</html>
